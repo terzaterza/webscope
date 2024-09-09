@@ -1,3 +1,10 @@
+export interface TextParameter {
+    type:       "text";
+    minLength:  number;
+    maxLength:  number;
+    default?:   string;
+}
+
 export interface NumberParameter {
     type:       "number";
     min:        number;
@@ -15,6 +22,7 @@ export interface SelectParameter<T> {
 export interface OptionParameter {
     type:       "option";
     checked:    boolean;
+    default?:   boolean;
 }
 
 export interface ParameterMetadata {
@@ -23,7 +31,7 @@ export interface ParameterMetadata {
 }
 
 
-type ParameterUnion = NumberParameter | SelectParameter<any> | OptionParameter;
+type ParameterUnion = TextParameter | NumberParameter | SelectParameter<any> | OptionParameter;
 
 export type ParameterList = (ParameterUnion & ParameterMetadata)[];
 
@@ -31,6 +39,6 @@ export type ParameterMap = {
     [name: string]: ParameterUnion & ParameterMetadata
 };
 
-// export type ParameterValues<T extends ParameterMap> = {
-//     [key in keyof T]: T[key]["default"]
-// };
+export type ParameterValues<T extends ParameterMap> = {
+    [key in keyof T]: T[key]["default"]
+};
