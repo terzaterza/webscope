@@ -16,7 +16,7 @@ export interface BinaryWaveform {
 export interface Frame {
     data:   string;
     start:  number;
-    end?:   number;
+    end:   number;
 }
 
 export interface FrameWaveform {
@@ -27,3 +27,5 @@ export interface FrameWaveform {
 export type Waveform = AnalogWaveform | BinaryWaveform | FrameWaveform;
 export type WaveformType = Waveform["dataType"];
 export type WaveformFromType<T extends WaveformType> = Extract<Waveform, {dataType: T}>;
+
+/** @todo Add saveWaveform and loadWaveform functions to be used by Session or independently */

@@ -1,52 +1,74 @@
-import { DecoderWaveformStream, WaveformStream } from "./Stream";
-import { objectMap } from "./Util";
+import { WaveformStream, WaveformStreamMetadata } from "./Stream";
 import { Waveform, WaveformType } from "./Waveform";
 
 /**
  * Data about a single stream output channel
  */
-interface WaveformInstance {
+export interface WaveformInstance {
     name:       string;
     dataType:   WaveformType;
     waveform?:  Waveform;
-    stream:     WaveformStream;
-    listeners:  DecoderWaveformStream[];
+    stream:     WaveformStream<any>;
+    listeners:  DecoderInstance[];
 
     enabled:    boolean; // If false stream will not be able to update the waveform
     append:     boolean; // If true new waveforms from the stream will be appended to the end
 }
 
+/**
+ * Data about a decoder stream instance to track
+ * input waveform dependencies
+ */
+interface DecoderInstance {
+    decoder: any; /** @todo Replace with DecoderWaveformStream */
+    inputs: {[ch: string]: WaveformInstance | undefined};
+}
+
+/**
+ * Session is the object which tracks the state of a
+ * collection of waveforms and streams
+ */
 export class Session {
+
+    /**
+     * Session requires a render callback function to signal to the UI
+     * when has the waveform data changed and needs to be rerendered
+     */
+    constructor(
+        private readonly renderCallback: (waveforms: WaveformInstance[]) => void
+    ) {}
+
+    /** @todo Add save and load to be able to store sessions as a file (or cookie) */
 
     /**
      * Add a stream instance to the session
      * 
      * Creates all the waveforms that the stream can produce
      */
-    public streamAdd(streamName: string, stream: WaveformStream): void {
-        /* Map each stream output channel to a waveform instance */
-        const waveformInstances = objectMap(stream.outputType,
-            (outputName, outputDataType) => ({
+    public addStream(streamName: string, stream: WaveformStream<WaveformStreamMetadata>): void {
+        /* For each output of the stream create a waveform instance */
+        for (const [outputName, outputType] of Object.entries(stream.metadata.output)) {
+            const instance: WaveformInstance = {
                 name:       streamName + " (" + outputName + ")",
-                dataType:   outputDataType,
+                dataType:   outputType,
                 stream:     stream,
                 listeners:  [],
                 enabled:    true,
                 append:     true
-            })
-        );
+            };
 
-        /* Add all waveforms to the session waveform list */
-        this.waveforms.push(...Object.values(waveformInstances));
+            /* Add this instance to the list of current session waveforms */
+            this.waveforms.push(instance);
 
-        /* When data from the stream is ready, assign each waveform to
-        the corresponding stream output channel */
-        stream.setCallback((data) => {
-            for (const [ch, waveform] of Object.entries(data)) {
-                this.updateWaveform(waveformInstances[ch], waveform);
-            }
-        });
-    }
+            /* Set the callback for when the streams generates new data */
+            stream.setCallback(outputName, (data: Waveform) => {
+                this.updateWaveform(instance, data);
+            });
+        }
+
+        /* Rerender waveforms */
+        this.renderCallback(this.waveforms);
+    };
 
     /**
      * Returns instances of all waveforms that match
@@ -69,34 +91,31 @@ export class Session {
      * is available
      */
     private updateWaveform(instance: WaveformInstance, data: Waveform): void {
-        /* Data type of the channel and the received waveform should always match */
-        console.assert(instance.dataType === data.dataType);
-
-        // If the channel is disabled, cannot update the waveform
+        /* If the channel is disabled, can't update the waveform */
         if (!instance.enabled)
             return;
 
+        /* If the update sequence was not already started, we are the first */
+        const firstInSequence = !this.updateSequenceStarted;
+        /* It's okay to set to true even if already was true */
+        this.updateSequenceStarted = true;
+
+        /* If we want to append this data and there is already some data, do a merge */
         if (instance.append && instance.waveform) {
-            /** @todo Add merge_waveforms function to Waveform.ts and use it here to merge current and new waveforms */
+            /** @todo Add mergeWaveforms function to Waveform.ts and use it here to merge current and new waveforms */
         } else {
             instance.waveform = data;
         }
 
-        /** @todo Call listeners of this channel */
-    }
+        /** @todo Call listeners */
 
-    /**
-     * Used as a callback to add the decoder stream as a listener of
-     * the selected waveform
-     * @note This function is only referenced from `getWaveformsForDecoderInput`
-     */
-    private decoderStreamSelectInput(stream: DecoderWaveformStream, waveform: WaveformInstance) {
-        /** @todo Check if this waveform is not already assigned as the stream input, if it is, return */
-
-        /** @todo Remove from old waveform.listeners */
-
-        waveform.listeners.push(stream);
-    }
+        /* Trigger rerendering if this was the first update in the sequence */
+        if (firstInSequence) {
+            this.renderCallback(this.waveforms);
+            this.updateSequenceStarted = false;
+        }
+    };
 
     private waveforms: WaveformInstance[] = [];
+    private updateSequenceStarted: boolean = false; /* Used by updateWaveform to track when to rerender the data */
 }

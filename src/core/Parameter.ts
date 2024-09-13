@@ -9,14 +9,14 @@ export interface NumberParameter {
     type:       "number";
     min:        number;
     max:        number;
-    step:       number;
+    step?:      number;
     default?:   number;
 }
 
 export interface SelectParameter<T> {
     type:       "select";
     options:    T[];
-    default?:    T;
+    default?:   T;
 }
 
 export interface OptionParameter {
