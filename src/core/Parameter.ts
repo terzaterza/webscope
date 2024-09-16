@@ -1,44 +1,49 @@
-export interface TextParameter {
+interface TextParameter {
     type:       "text";
     minLength:  number;
     maxLength:  number;
-    default?:   string;
+    default:    string;
 }
 
-export interface NumberParameter {
+interface NumberParameter {
     type:       "number";
     min:        number;
     max:        number;
     step?:      number;
-    default?:   number;
+    default:    number;
 }
 
-export interface SelectParameter<T> {
+interface SelectParameter<T> {
     type:       "select";
     options:    T[];
-    default?:   T;
+    default:    T;
 }
 
-export interface OptionParameter {
+interface OptionParameter {
     type:       "option";
     checked:    boolean;
-    default?:   boolean;
+    default:    boolean;
 }
 
-export interface ParameterMetadata {
-    name?:          string;
-    description?:   string;
+interface ParameterMetadata {
+    name:   string;
+    desc?:  string;
 }
-
 
 type ParameterUnion = TextParameter | NumberParameter | SelectParameter<any> | OptionParameter;
 
-export type ParameterList = (ParameterUnion & ParameterMetadata)[];
+/**
+ * Parameter metadata (name, description, ...) and specific data type information
+ */
+export type Parameter = ParameterMetadata & ParameterUnion;
 
+/**
+ * Map parameter id(s) to parameter information
+ */
 export type ParameterMap = {
-    [name: string]: ParameterUnion & ParameterMetadata
+    [id: string]: Parameter
 };
 
-export type ParameterValues<T extends ParameterMap> = {
+export type ParameterValues<T extends ParameterMap = ParameterMap> = {
     [key in keyof T]: T[key]["default"]
 };

@@ -67,7 +67,7 @@ export class Session {
         }
 
         /* Rerender waveforms */
-        this.renderCallback(this.waveforms);
+        this.renderCallback([...this.waveforms]);
     };
 
     /**
@@ -111,8 +111,8 @@ export class Session {
 
         /* Trigger rerendering if this was the first update in the sequence */
         if (firstInSequence) {
-            this.renderCallback(this.waveforms);
             this.updateSequenceStarted = false;
+            this.renderCallback([...this.waveforms]);
         }
     };
 

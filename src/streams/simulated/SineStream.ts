@@ -6,25 +6,30 @@ import { registerStream, WaveformStream, WaveformStreamMetadata } from "../../co
  * @todo Add waveform length as a parameter, currently fixed as `WAVEFORM_LENGTH`
  */
 const sineStreamParameters = {
-    "Amplitude": {
+    "amp": {
+        name: "Amplitude",
         type: "number",
         min: 0,
-        max: 1e6,
+        max: 500,
         default: 1
     },
-    "Frequency": {
+    "f": {
+        name: "Frequency",
         type: "number",
         min: 0,
         max: 1e10,
         default: 1e3
     },
-    "Phase": {
+    "phase": {
+        name: "Phase",
         type: "number",
         min: 0,
         max: 2 * Math.PI,
+        step: 0.01,
         default: 0
     },
-    "Sample Rate": {
+    "fs": {
+        name: "Sample rate",
         type: "number",
         min: 1,
         max: 1e10,
@@ -69,18 +74,18 @@ class SineStream extends WaveformStream<typeof sineStreamMetadata> {
     }
 
     private generateWaveform() {
-        const sampleRate = this.getParameter("Sample Rate");
-        const amplitude = this.getParameter("Amplitude");
-        const angRate = 2 * Math.PI * this.getParameter("Frequency");
-        const phase = this.getParameter("Phase");
+        const sampleRate = this.getParameter("fs");
+        const amplitude = this.getParameter("amp");
+        const angRate = 2 * Math.PI * this.getParameter("f");
+        const phase = this.getParameter("phase");
 
-        const timeSamples = Array(WAVEFORM_LENGTH).map((v, i) =>
+        const timeSamples = Array(WAVEFORM_LENGTH).fill(0).map((v, i) =>
             (this.sampleOffset + i) / sampleRate
         );
         
         const waveform = timeSamples.map((t) =>
             Math.sin(t * angRate + phase) * amplitude
-    );
+        );
     
         this.sampleOffset += timeSamples.length;
         this.onWaveformReady({"Sin": {
