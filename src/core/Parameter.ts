@@ -1,7 +1,7 @@
 interface TextParameter {
     type:       "text";
-    minLength:  number;
-    maxLength:  number;
+    minLength?: number;
+    maxLength?: number;
     default:    string;
 }
 

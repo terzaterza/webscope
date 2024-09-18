@@ -10,7 +10,7 @@ const sineStreamParameters = {
         name: "Amplitude",
         type: "number",
         min: 0,
-        max: 500,
+        max: 1000,
         default: 1
     },
     "f": {
@@ -25,7 +25,6 @@ const sineStreamParameters = {
         type: "number",
         min: 0,
         max: 2 * Math.PI,
-        step: 0.01,
         default: 0
     },
     "fs": {
