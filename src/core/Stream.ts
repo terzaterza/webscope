@@ -21,10 +21,10 @@ export abstract class WaveformStream<T extends WaveformStreamMetadata> {
 
     /**
      * @param metadata Should be provided directly by the derived class
-     * @param defaultParameters Is provided by the session on waveform instantiation
+     * @param initialParameters Is provided by the session on waveform instantiation
      */
-    constructor(public readonly metadata: T, defaultParameters: ParameterValues<T["params"]>) {
-        this.parameterValues = {...defaultParameters};
+    constructor(public readonly metadata: T, initialParameters: ParameterValues<T["params"]>) {
+        this.parameterValues = {...initialParameters};
     }
 
     /**
@@ -33,7 +33,34 @@ export abstract class WaveformStream<T extends WaveformStreamMetadata> {
      * This is called by the session after the callback has been
      * assigned and the stream instance has been created and setup
      */
-    // public abstract start(): void;
+    public abstract start(): void;
+
+    /**
+     * Abstract method to allow streams to react to setting new
+     * parameter values
+     * 
+     * This can be used to communicate with serial port devices
+     * for setting parameters dynamically as UI sets new values
+     */
+    protected abstract onSetParameter(id: keyof T["params"], value: T["params"][typeof id]["default"]): Promise<void>;
+
+    /**
+     * This method is called by the UI when a parameter value
+     * has been changed
+     * 
+     * @returns true if parameter was set successfully
+     */
+    public async trySetParameter(id: keyof T["params"], value: T["params"][typeof id]["default"]): Promise<void> {
+        const promise = this.onSetParameter(id, value);
+
+        promise.then(() => {
+            this.parameterValues[id] = value;
+        }).catch(() => {
+            console.warn("Parameter setting failed!", this, id, value);
+            /** @todo This branch is for testing only, `catch` here is not needed */
+        })
+        return promise;
+    }
 
     /**
      * Used by the Session object to set the callback
@@ -42,6 +69,13 @@ export abstract class WaveformStream<T extends WaveformStreamMetadata> {
     public setCallback(ch: string, callback: ChannelCallback): void {
         console.assert(ch in this.metadata.output);
         this.dataReadyCallback[ch] = callback;
+    }
+
+    /**
+     * Get a copy of parameter values
+     */
+    public getParameterValues() {
+        return {...this.parameterValues};
     }
 
     /**
@@ -58,13 +92,6 @@ export abstract class WaveformStream<T extends WaveformStreamMetadata> {
             if (this.dataReadyCallback[ch])
                 this.dataReadyCallback[ch](waveform);
         }
-    }
-
-    /**
-     * Get value for the current parameter setting
-     */
-    protected getParameter(parameter: keyof T["params"]) {
-        return this.parameterValues[parameter];
     }
 
     private dataReadyCallback: {[ch: string]: ChannelCallback} = {};

@@ -1,8 +1,6 @@
 import { Parameter, ParameterMap, ParameterValues } from "../core/Parameter";
-import { Box, Checkbox, MenuItem, Select, Slider, TextField, Tooltip, Typography } from "@mui/material";
+import { MenuItem, TextField, Tooltip } from "@mui/material";
 import Grid from "@mui/material/Grid2";
-import { numberSIFormat, objectMap } from "../core/Util";
-import { useState } from "react";
 
 /**
  * Unified props for all parameter types
@@ -15,6 +13,7 @@ interface ParameterProps<T> {
 
 /**
  * Component for entering text input
+ * @todo Change this and number param component to call props.onChange when leaving focus (onBlur)
  */
 function TextParameterComponent(props: ParameterProps<"text">) {
     return (

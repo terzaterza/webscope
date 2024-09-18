@@ -66,18 +66,33 @@ const WAVEFORM_LENGTH: number = 1024;
  * @note `sineStreamMetadata` is used as generic type for the stream class
  */
 class SineStream extends WaveformStream<typeof sineStreamMetadata> {
-    
-    constructor(parameters: ParameterValues<typeof sineStreamParameters>) {
-        super(sineStreamMetadata, parameters);
 
+    constructor(initialParameters: ParameterValues<typeof sineStreamParameters>) {
+        super(sineStreamMetadata, initialParameters);
+    }
+
+    public start(): void {
+        /* Generate a waveform */
+        this.generateWaveform();
+
+        /* Set a timer to generate data every second */
         setInterval(() => {this.generateWaveform();}, WAVEFORM_GENERATION_DELAY_MS);
     }
 
+    protected onSetParameter(id: "fs" | "amp" | "f" | "phase", value: number): Promise<void> {
+        /** @todo Can call generateWaveform() here to be more responsive */
+
+        /* No communication with any devices so just return true */
+        return Promise.resolve();
+    }
+
     private generateWaveform() {
-        const sampleRate = this.getParameter("fs");
-        const amplitude = this.getParameter("amp");
-        const angRate = 2 * Math.PI * this.getParameter("f");
-        const phase = this.getParameter("phase");
+        const parameters = this.getParameterValues();
+        
+        const sampleRate = parameters["fs"];
+        const amplitude = parameters["amp"];
+        const angRate = 2 * Math.PI * parameters["f"];
+        const phase = parameters["phase"];
 
         const timeSamples = Array(WAVEFORM_LENGTH).fill(0).map((v, i) =>
             (this.sampleOffset + i) / sampleRate

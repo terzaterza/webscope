@@ -8,8 +8,10 @@ export interface WaveformInstance {
     name:       string;
     dataType:   WaveformType;
     waveform?:  Waveform;
-    stream:     WaveformStream<any>;
+    stream:     WaveformStream<WaveformStreamMetadata>;
     listeners:  DecoderInstance[];
+    /** @todo Figure out whether to keep stream parameter values here or in stream object */
+    /** @todo Figure out where to keep decoder stream input channel mappings */
 
     enabled:    boolean; // If false stream will not be able to update the waveform
     append:     boolean; // If true new waveforms from the stream will be appended to the end
@@ -54,7 +56,7 @@ export class Session {
                 stream:     stream,
                 listeners:  [],
                 enabled:    true,
-                append:     true
+                append:     false
             };
 
             /* Add this instance to the list of current session waveforms */
@@ -65,6 +67,11 @@ export class Session {
                 this.updateWaveform(instance, data);
             });
         }
+
+        /* Now that the callbacks exist, can start with data generation */
+        stream.start();
+        
+        /** @todo Check if can avoid double rendering here (from stream start and the render below) */
 
         /* Rerender waveforms */
         this.renderCallback([...this.waveforms]);
