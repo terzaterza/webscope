@@ -20,15 +20,17 @@ function InstanceSettingsDialog(props: InstanceSettingsDialogProps) {
     const [paramValues, setParamValues] = useState(props.instance.stream.getParameterValues());
 
     const handleSetParameter = (k: string, v: any) => {
-        /** @todo Set the loading icon here and remove on promise resolve or fail */
-        props.instance.stream.trySetParameter(k, v).then(() => {
+        const promise = props.instance.stream.trySetParameter(k, v);
+
+        promise.then(() => {
             const newParamValues = {...paramValues};
             newParamValues[k] = v;
             setParamValues(newParamValues);
         }).catch(() => {
             console.warn("UI parameter error caught");
-            /** @todo Set input element to show error through props */
         });
+
+        return promise;
     };
 
     /** @todo If stream is of decoder type use this */
@@ -36,6 +38,7 @@ function InstanceSettingsDialog(props: InstanceSettingsDialogProps) {
         
     };
 
+    /** @todo Fix sizing of the popover */
     return (
         <Popover open={props.open} onClose={props.onClose} anchorEl={props.anchor}>
             <DialogTitle>{props.instance.name /* Add icon here (also to the button) to signal data type */}</DialogTitle>
@@ -105,6 +108,8 @@ function CreateStreamDialog(props: CreateStreamDialogProps) {
         const newParams: ParameterValues = {...selectedStream.paramValues};
         newParams[key] = value;
         setSelectedStream({...selectedStream, paramValues: newParams});
+        
+        return Promise.resolve();
     };
 
     const handleSubmit = () => {

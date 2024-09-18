@@ -1,6 +1,7 @@
 import { Parameter, ParameterMap, ParameterValues } from "../core/Parameter";
-import { MenuItem, TextField, Tooltip } from "@mui/material";
+import { CircularProgress, InputAdornment, MenuItem, TextField, Tooltip } from "@mui/material";
 import Grid from "@mui/material/Grid2";
+import { useState } from "react";
 
 /**
  * Unified props for all parameter types
@@ -8,7 +9,7 @@ import Grid from "@mui/material/Grid2";
 interface ParameterProps<T> {
     param:      Extract<Parameter, {type: T}>;
     value:      ParameterProps<T>["param"]["default"];
-    onChange:   (value: ParameterProps<T>["value"]) => void;
+    onChange:   (value: ParameterProps<T>["value"]) => Promise<void>;
 }
 
 /**
@@ -16,19 +17,37 @@ interface ParameterProps<T> {
  * @todo Change this and number param component to call props.onChange when leaving focus (onBlur)
  */
 function TextParameterComponent(props: ParameterProps<"text">) {
+    const [waiting, setWaiting] = useState(false);
+    const [errorMsg, setErrorMsg] = useState<string>();
+
+    /** @todo Can do manual validation without asking for the `valid` parameter */
+    const handleSubmitValue = (value: string, valid?: boolean) => {
+        if (!valid) {
+            setErrorMsg(`Invalid input (Min length: ${props.param.minLength ?? ""}, Max: ${props.param.maxLength ?? ""})`);
+        } else {
+            setWaiting(true);
+            props.onChange(value)
+                .then(() => setErrorMsg(undefined))
+                .catch(() => setErrorMsg("Failed setting the parameter value"))
+                .finally(() => setWaiting(false));
+        }
+    };
+
     return (
         <Tooltip title={props.param.desc}>
             <TextField
+                disabled={waiting}
                 label={props.param.name}
-                value={props.value}
+                defaultValue={props.value}
+                error={errorMsg !== undefined}
+                helperText={errorMsg}
                 slotProps={{htmlInput: {
                     minLength: props.param.minLength,
                     maxLength: props.param.maxLength
+                }, input: {
+                    endAdornment: waiting && <InputAdornment position="end"><CircularProgress size={"1.5em"} /></InputAdornment>
                 }}}
-                onChange={(ev) => {
-                    if (ev.target.checkValidity())
-                        props.onChange(ev.target.value);
-                }}
+                onBlur={(ev) => handleSubmitValue(ev.target.value, ev.target.checkValidity())}
                 fullWidth
             ></TextField>
         </Tooltip>
@@ -38,22 +57,40 @@ function TextParameterComponent(props: ParameterProps<"text">) {
 /**
  * Component for entering a numerical value with the given constraints
  */
-function NumberParameterComponent(props: ParameterProps<"number">) {    
+function NumberParameterComponent(props: ParameterProps<"number">) {
+    const [waiting, setWaiting] = useState(false);
+    const [errorMsg, setErrorMsg] = useState<string>();
+
+    /** @todo Can do manual validation without asking for the `valid` parameter */
+    const handleSubmitValue = (value: string, valid?: boolean) => {
+        if (!valid) {
+            setErrorMsg(`Invalid input (Min: ${props.param.min}, Max: ${props.param.max})`);
+        } else {
+            setWaiting(true);
+            props.onChange(parseFloat(value))
+                .then(() => setErrorMsg(undefined))
+                .catch(() => setErrorMsg("Failed setting the parameter value"))
+                .finally(() => setWaiting(false));
+        }
+    };
+
     return (
         <Tooltip title={props.param.desc}>
             <TextField
                 type="number"
+                disabled={waiting}
                 label={props.param.name}
-                value={props.value}
+                defaultValue={props.value}
+                error={errorMsg !== undefined}
+                helperText={errorMsg}
                 slotProps={{htmlInput: {
                     min: props.param.min,
                     max: props.param.max,
-                    step: props.param.step
+                    step: props.param.step ?? 1e-12
+                }, input: {
+                    endAdornment: waiting && <InputAdornment position="end"><CircularProgress size={"1.5em"} /></InputAdornment>
                 }}}
-                onChange={(ev) => {
-                    if (ev.target.checkValidity())
-                        props.onChange(Number(ev.target.value));
-                }}
+                onBlur={(ev) => handleSubmitValue(ev.target.value, ev.target.checkValidity())}
                 fullWidth
             ></TextField>
         </Tooltip>
@@ -101,8 +138,8 @@ function OptionParameterComponent(props: ParameterProps<"option">) {
 
 interface ParameterMapProps {
     parameters: ParameterMap;
-    values:     ParameterValues<ParameterMap>; /** @todo Can make this interface <T extends ParameterMap> */
-    setValue:   (key: string, value: string | number) => void; /** @todo Can make key and value: keyof T and T[keyof T] */
+    values:     ParameterValues<ParameterMap>;
+    setValue:   (key: string, value: string | number) => Promise<void>;
 }
 
 /**
@@ -110,6 +147,7 @@ interface ParameterMapProps {
  */
 export function ParameterMapComponent(props: ParameterMapProps) {
     const parameterRender = (id: string, p: Parameter) => {
+        
         const onChange = (value: typeof p.default) => props.setValue(id, value);
 
         switch (p.type) {
