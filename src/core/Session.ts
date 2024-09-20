@@ -1,3 +1,4 @@
+import { DecoderMetadata, DecoderStream } from "./Decoder";
 import { WaveformStream, WaveformStreamMetadata } from "./Stream";
 import { Waveform, WaveformType } from "./Waveform";
 
@@ -9,21 +10,13 @@ export interface WaveformInstance {
     dataType:   WaveformType;
     waveform?:  Waveform;
     stream:     WaveformStream<WaveformStreamMetadata>;
-    listeners:  DecoderInstance[];
-    /** @todo Figure out whether to keep stream parameter values here or in stream object */
+    listeners:  DecoderStream<DecoderMetadata>[];
     /** @todo Figure out where to keep decoder stream input channel mappings */
 
+    /** @todo Rename to locked and reverse the logic (from !enabled to locked) */
     enabled:    boolean; // If false stream will not be able to update the waveform
-    append:     boolean; // If true new waveforms from the stream will be appended to the end
-}
-
-/**
- * Data about a decoder stream instance to track
- * input waveform dependencies
- */
-interface DecoderInstance {
-    decoder: any; /** @todo Replace with DecoderWaveformStream */
-    inputs: {[ch: string]: WaveformInstance | undefined};
+    append:     boolean; // If true new waveforms from the stream will be appended to the 
+    /** @todo Append for decoder streams must depend on whether the decoder supports streaming */
 }
 
 /**
@@ -46,13 +39,16 @@ export class Session {
      * Add a stream instance to the session
      * 
      * Creates all the waveforms that the stream can produce
+     * 
+     * @todo Pass StreamDatabaseItem instead of stream object and
+     * instantiate inside this method
      */
     public addStream(streamName: string, stream: WaveformStream<WaveformStreamMetadata>): void {
         /* For each output of the stream create a waveform instance */
-        for (const [outputName, outputType] of Object.entries(stream.metadata.output)) {
+        for (const [chName, chDataType] of Object.entries(stream.metadata.output)) {
             const instance: WaveformInstance = {
-                name:       streamName + " (" + outputName + ")",
-                dataType:   outputType,
+                name:       streamName + " (" + chName + ")",
+                dataType:   chDataType,
                 stream:     stream,
                 listeners:  [],
                 enabled:    true,
@@ -63,7 +59,7 @@ export class Session {
             this.waveforms.push(instance);
 
             /* Set the callback for when the streams generates new data */
-            stream.setCallback(outputName, (data: Waveform) => {
+            stream.setCallback(chName, (data: Waveform) => {
                 this.updateWaveform(instance, data);
             });
         }
@@ -76,6 +72,10 @@ export class Session {
         /* Rerender waveforms */
         this.renderCallback([...this.waveforms]);
     };
+
+    public removeStream() {
+        /** @todo Remove stream and for all listeners of the stream's waveforms, set the listener's input to undefined */
+    }
 
     /**
      * Returns instances of all waveforms that match

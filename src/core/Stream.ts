@@ -1,16 +1,26 @@
 import { ParameterMap, ParameterValues } from "./Parameter";
 import { Waveform, WaveformFromType, WaveformType } from "./Waveform";
 
-type StreamOutputType   = { [ch: string]: WaveformType };
 type ChannelCallback    = (data: Waveform) => void;
+
+/**
+ * Map IDs to channel data
+ */
+type OutputChannels = { [channelName: string]: WaveformType };
+
+/**
+ * Map channel data to waveforms of the appropriate type
+ */
+type OutputWaveforms<T extends OutputChannels> = { [ch in keyof T]: WaveformFromType<T[ch]> };
 
 /**
  * Information required when registering the stream
  */
 export interface WaveformStreamMetadata {
     name:   string;
+    desc?:  string;
     params: ParameterMap;
-    output: StreamOutputType;
+    output: OutputChannels;
 }
 
 /**
@@ -82,7 +92,7 @@ export abstract class WaveformStream<T extends WaveformStreamMetadata> {
      * Call from derived stream class once the
      * raw data has been converted to a waveform
      */
-    protected onWaveformReady(data: {[ch in keyof T["output"]]: WaveformFromType<T["output"][ch]>}): void {
+    protected onWaveformReady(data: Partial<OutputWaveforms<T["output"]>>): void {
         for (const [ch, waveform] of Object.entries(data)) {
             /** @todo Verify that data is actually of data type */
             
