@@ -86,11 +86,7 @@ export class Session {
      * @todo Finish this and the decoder stream input select mechanism
      */
     public getWaveformsOfType(type: WaveformType) {
-        return this.waveforms
-            .filter((v) => v.dataType === type)
-            .map((v) => ({
-                name: v.name
-            }));
+        return this.waveforms.filter((v) => v.dataType === type);
     }
 
     /**
