@@ -1,12 +1,11 @@
-import { channel } from "diagnostics_channel";
-import { DecoderMetadata, DecoderStream, InputSamples, InputWaveforms } from "../../core/Decoder";
+import { DecoderMetadata, DecoderStream, InputChannels, InputSamples, InputWaveforms } from "../../core/Decoder";
 import { ParameterValues } from "../../core/Parameter";
 import { objectMap, PriorityQueue } from "../../core/Util";
 import { AnalogWaveform, BinaryWaveform, Frame, FrameWaveform, WaveformFromType, WaveformType } from "../../core/Waveform";
 
 interface AnalogTrigger {
-    level:  number;
-    cross:  "above" | "below";
+    thresh: number;
+    level:  "high" | "low";
 }
 
 interface BinaryTrigger {
@@ -18,11 +17,13 @@ type TriggerFromDataType<T extends WaveformType> =
     T extends BinaryWaveform["dataType"] ? BinaryTrigger :
     never;
 
-function checkTrigger<T extends WaveformType>(
+function checkTrigger<T extends InputChannels[string]["dataType"]>(
+    dataType:   T,
     trigger:    TriggerFromDataType<T>,
     prevValue:  WaveformFromType<T>["data"][number],
     value:      WaveformFromType<T>["data"][number]
 ): boolean {
+    // STOPPED HERE - Implement this
     return false;
 }
 
@@ -33,6 +34,13 @@ function checkTrigger<T extends WaveformType>(
  */
 type TriggerSet<T extends DecoderMetadata> = {
     [name: string]: {[ch in keyof T["input"]]?: TriggerFromDataType<T["input"][ch]["dataType"]>}
+};
+
+/**
+ * Used to track the state of individual triggers in a TriggerSet
+ */
+type TriggerSetState = {
+    [condition: string]: {[ch: string]: boolean}
 };
 
 /**
@@ -62,6 +70,11 @@ export abstract class FrameDecoderStream<T extends FrameDecoderMetadata> extends
         super(metadata, params);
         this.reset();
     }
+
+    /**
+     * Implementation of the decoding process for the frame decoder
+     */
+    protected abstract frameDecode(): void;
     
     /**
      * Skip `seconds` ahead the current time position
@@ -91,7 +104,9 @@ export abstract class FrameDecoderStream<T extends FrameDecoderMetadata> extends
         for the next stream of data, which will be resolved through a promise */
         for (const ch in samplePositions) {
             if (samplePositions[ch] >= this.currentInput[ch].data.length)
-                return this.pauseDecoding(nextTime);
+                return new Promise((resolve, reject) => {
+                    this.timePromise = {time: nextTime, resolve: resolve, reject: reject};
+                });
         }
 
         /* If all the waveforms have a valid sample at this time point
@@ -103,54 +118,94 @@ export abstract class FrameDecoderStream<T extends FrameDecoderMetadata> extends
     }
 
     /**
-     * 
+     * Wait for any one of the multiple trigger conditions, where
+     * each conditions consists of required value (or change of value)
+     * for some of the input channels
      */
-    protected waitTrigger(triggerSet: TriggerSet<T>): Promise<InputSamples<T["input"]>> {
+    protected waitTrigger(triggerSet: TriggerSet<T>, triggerSetState?: TriggerSetState): Promise<[keyof typeof triggerSet, InputSamples<T["input"]>]> {
         interface QueueItem {
+            ch:         keyof T["input"];
+            waveform:   InputWaveforms<T["input"]>[string];
             sampleTime: number;
-            channel:    InputWaveforms<T["input"]>[keyof T["input"]];
-            lastValue:  number;
         };
 
         if (!this.currentInput)
             throw new NoInputAssignedError();
 
+        /* A priority queue is used to keep track of positions of samples
+        for each of the waveforms, such that the waveform with the earliest
+        next sample is processed */
         const queue = new PriorityQueue<QueueItem>(
             Object.keys(this.currentInput).length,
             (a: QueueItem, b: QueueItem) => {
+                /* If two samples have the same time, process the one with
+                the smaller time increment (bigger sample rate) */
                 if (a.sampleTime !== b.sampleTime)
                     return a.sampleTime < b.sampleTime;
-                return a.channel.sampleRate > b.channel.sampleRate;
+                return a.waveform.sampleRate > b.waveform.sampleRate;
             }
         );
 
+        /* Initialize the queue with the input waveforms
+        
+        Indices are chosen as first after the current time
+        position (rounded up) since we don't want to trigger on
+        something that happened before the current time */
         for (const ch in this.currentInput) {
+            const waveform = this.currentInput[ch];
             queue.add({
-                sampleTime: Math.floor(this.timeOffset * this.currentInput[ch].sampleRate),
-                channel:    this.currentInput[ch],
-                lastValue:  this.currentInput[ch].data[0]
+                ch: ch,
+                waveform: waveform,
+                sampleTime: Math.ceil(this.timeOffset * waveform.sampleRate) / waveform.sampleRate
             });
         }
 
-        /** @todo Keep track of trigger conditions for each member of the trigger set */
-        /** so it doesn't have to be recomputed for each sample (only has to be recomputed
-         * for the channel whose sample time was changed) */
+        /* Keep track of trigger conditions for each member of the trigger set
+        so it doesn't have to be recomputed for each sample (only has to be recomputed
+        for the channel whose sample time was changed) */
+        const triggerTracker = triggerSetState ?? objectMap(triggerSet, (conditionName, channelTriggers) => 
+            objectMap(channelTriggers, (ch, trigger) => false)
+        );
 
         while (true) {
+            /* Get the waveform with the earliest unprocessed sample */
             const first = queue.poll() as QueueItem;
-            const nextTime = first.sampleTime + 1 / first.channel.sampleRate;
-            const nextIndex = Math.floor(nextTime * first.channel.sampleRate);
+            const index = Math.round(first.sampleTime * first.waveform.sampleRate);
+            /* Calling Math.round just to get rid of floating point multiplication inaccuracies */
 
-            if (nextIndex >= first.channel.data.length)
-                return this.pauseDecoding(undefined, triggerSet);
+            /* Set the new time point to this sample's time */
+            /* This is done here so if the index is out of the bounds,
+            on next waitTrigger enter when the indices are calculated,
+            this channel is the first one that gets processed */
+            this.timeOffset = first.sampleTime;
 
-            first.sampleTime = nextTime;
-            first.lastValue = first.channel.data[nextIndex];
+            /* If there is no data for this waveform at the specified time,
+            delay decoding until more data is available */
+            if (index >= first.waveform.data.length)
+                return new Promise((resolve, reject) => {
+                    this.triggerPromise = {triggers: triggerSet, triggerState: {...triggerTracker}, resolve: resolve, reject: reject};
+                });
+
+            /* Check if this (first's) waveform sample has satisfied any of the conditions */
+            const prevValue = first.waveform.data[index > 0 ? (index - 1) : 0];
+            const currValue = first.waveform.data[index];
+            for (const conditionName in triggerTracker) {
+                triggerTracker[conditionName][first.ch as string] = checkTrigger(
+                    triggerSet[conditionName][first.ch] as AnalogTrigger | BinaryTrigger,
+                    prevValue,
+                    currValue
+                );
+            }
+
+            /* Check if any of the condition sets has been fully satisifed */
+            for (const conditionName in triggerSet) {
+                if (Object.values(triggerTracker[conditionName]).every((v) => v))
+                    return Promise.resolve([conditionName, this.getInputAtTime(this.currentInput, this.timeOffset)]);
+            }
+
+            /* Update the next time for this waveform and re-add it to the queue */
+            first.sampleTime += 1 / first.waveform.sampleRate;
             queue.add(first);
-
-            // const samples = queue.toArray().map((v) => [v.channel.]) - STOPPED HERE
-
-            this.timeOffset = (queue.peek() as QueueItem).sampleTime;
         }
         
         return Promise.reject();
@@ -187,26 +242,32 @@ export abstract class FrameDecoderStream<T extends FrameDecoderMetadata> extends
      * Frame decoder implementation
      */
     protected async decode(input: InputWaveforms<T["input"]>, fromStart: boolean) {
+        /* If decoding from the start, reset the decoder state */
         if (fromStart)
             this.reset();
 
-        if (this.waitPromise) {
-            const promise = this.waitPromise;
-            this.waitPromise = undefined;
+        /* If a promise exists handle it and exit before calling the decode implementation again */
+        if (this.timePromise) {
+            const promise = this.timePromise;
+            this.timePromise = undefined;
 
-            if (promise.type === "time") {
-                this.waitTime(promise.data as number)
-                    .then((data) => promise.resolve(data))
-                    .catch(() => promise.reject());
-            } else {
-                this.waitTrigger(promise.data as TriggerSet<T>)
-                    .then((data) => promise.resolve(data))
-                    .catch(() => promise.reject());
-            }
+            this.waitTime(promise.time)
+                .then((data) => promise.resolve(data))
+                .catch(() => promise.reject());
+            return;
+        } else if (this.triggerPromise) {
+            const promise = this.triggerPromise;
+            this.triggerPromise = undefined;
+
+            this.waitTrigger(promise.triggers)
+                .then((data) => promise.resolve(data))
+                .catch(() => promise.reject());
+            return;
         }
         
         try {
-            /** @todo Call abstract method of this class (async frameDecode...) */
+            this.currentInput = input;
+            this.frameDecode();
         } catch {
             /* Promise of last started decode was not resolved so we should reset */
             this.reset();
@@ -218,35 +279,19 @@ export abstract class FrameDecoderStream<T extends FrameDecoderMetadata> extends
      */
     private reset() {
         /* If a promise exists, reject it since there will be no new data to fulfill it */
-        if (this.waitPromise)
-            this.waitPromise.reject();
+        if (this.timePromise)
+            this.timePromise.reject();
 
-        this.waitPromise = undefined;
+        if (this.triggerPromise)
+            this.triggerPromise.reject();
+
+        this.timePromise = this.triggerPromise = undefined;
         this.timeOffset = 0;
         this.startedFrame = {};
         this.currentInput = undefined;
+
         for (const ch in this.currentOutput)
             this.currentOutput[ch] = {data: [], dataType: "frame"};
-    }
-
-    /**
-     * 
-     */
-    private pauseDecoding(time?: number, triggerSet?: TriggerSet<T>): Promise<InputSamples<T["input"]>> {
-        console.assert(!this.waitPromise);
-        
-        if (time) {
-            return new Promise((resolve, reject) => {
-                this.waitPromise = {type: "time", data: time, resolve: resolve, reject: reject};
-            });
-        } else {
-            if (!triggerSet)
-                throw new Error("Invalid arguments for decoding pause");
-            
-            return new Promise((resolve, reject) => {
-                this.waitPromise = {type: "trigger", data: triggerSet, resolve: resolve, reject: reject};
-            });
-        }
     }
 
     /**
@@ -273,15 +318,24 @@ export abstract class FrameDecoderStream<T extends FrameDecoderMetadata> extends
     private timeOffset: number = 0;
 
     /**
-     * If this promise object (tuple) exits, it means either `waitTime` or
-     * `waitTrigger` reached the end of the waveforms without meeting the condition
-     * 
-     * On next decode call, this should first be resolved 
+     * If the `waitTime` method reaches the end of one of the waveforms
+     * this promise is set so that on next `decode` call, when new data
+     * is available, decoding can continue
      */
-    private waitPromise?: {
-        type: "time" | "trigger",
-        data: number | TriggerSet<T>,
-        resolve: (data: InputSamples<T["input"]>) => void,
+    private timePromise?: {
+        time: number;
+        resolve: (data: InputSamples<T["input"]>) => void;
         reject: () => void
+    };
+
+    /**
+     * Similar to `timePromise`, allows for continuing the decoding
+     * on new data arrival
+     */
+    private triggerPromise?: {
+        triggers: TriggerSet<T>;
+        triggerState: TriggerSetState;
+        resolve: (data: [keyof TriggerSet<T>, InputSamples<T["input"]>]) => void;
+        reject: () => void;
     };
 }
