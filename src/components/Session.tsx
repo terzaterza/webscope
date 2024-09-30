@@ -1,4 +1,4 @@
-import { Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, ListSubheader, MenuItem, Modal, Paper, Popover, Select, TextField, Typography } from "@mui/material";
+import { Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, ListSubheader, MenuItem, Modal, Paper, Popover, Select, TextField, Tooltip, Typography } from "@mui/material";
 import React, { useState } from "react";
 import { getStreamList, StreamDatabaseItem } from "../core/Stream";
 import { AnalogWaveform, BinaryWaveform, FrameWaveform } from "./Waveform";
@@ -7,11 +7,40 @@ import { Session, WaveformInstance } from "../core/Session";
 import { ParameterMapComponent } from "./Parameter";
 import { ParameterValues } from "../core/Parameter";
 import { objectMap } from "../core/Util";
+import { DecoderMetadata, DecoderStream } from "../core/Decoder";
 
+
+interface DecoderInputSelectProps {
+    stream:     DecoderStream<DecoderMetadata>;
+    session:    Session;
+}
+
+function DecoderInputSelect(props: DecoderInputSelectProps) {
+    return (
+        <Grid container size={12} spacing={1}>
+            {Object.entries(props.stream.getInputMappings()).map(([id, channelData]) => (
+                <Grid size={12} key={id}>
+                    <Tooltip title={channelData.desc}>
+                        <TextField select label={channelData.name} defaultValue={channelData.selected?.name ?? ""} fullWidth>
+                            {props.session.getWaveformsOfType(channelData.dataType).map((v, i) => (
+                                <MenuItem
+                                    key={i}
+                                    value={v.name}
+                                    onClick={(ev) => {props.stream.selectInput(id, v)}}
+                                >{v.name}</MenuItem>
+                            ))}
+                        </TextField>
+                    </Tooltip>
+                </Grid>
+            ))}
+        </Grid>
+    );
+}
 
 interface InstanceSettingsDialogProps {
     open:       boolean;
     instance:   WaveformInstance;
+    session:    Session; /* Used by decoder input select */
     anchor?:    HTMLElement;
     onClose:    () => void;
 }
@@ -33,32 +62,38 @@ function InstanceSettingsDialog(props: InstanceSettingsDialogProps) {
         return promise;
     };
 
-    /** @todo If stream is of decoder type use this */
-    const renderInputChannelOptions = () => {
-        
-    };
-
     /** @todo Fix sizing of the popover */
     return (
         <Popover open={props.open} onClose={props.onClose} anchorEl={props.anchor}>
-            <DialogTitle>{props.instance.name /* Add icon here (also to the button) to signal data type */}</DialogTitle>
-            <DialogContent style={{paddingTop: 10}}>
-                <ParameterMapComponent
-                    parameters={props.instance.stream.metadata.params}
-                    values={paramValues}
-                    setValue={handleSetParameter}
-                ></ParameterMapComponent>
-            </DialogContent>
+            <Box width={400}>
+                <DialogTitle>{props.instance.name /* Add icon here (also to the button) to signal data type */}</DialogTitle>
+                <DialogContent style={{paddingTop: 10}}>
+                    {props.instance.stream instanceof DecoderStream &&
+                        <DecoderInputSelect
+                            stream={props.instance.stream}
+                            session={props.session}
+                        ></DecoderInputSelect>
+                    }
+                    <Box height={20}>{/* Used for margin between elements */}</Box>
+                    <ParameterMapComponent
+                        parameters={props.instance.stream.metadata.params}
+                        values={paramValues}
+                        setValue={handleSetParameter}
+                    ></ParameterMapComponent>
+                </DialogContent>
+            </Box>
         </Popover>
     );
 }
 
 interface WaveformInstanceProps {
     instance: WaveformInstance;
+    session: Session;
 }
 
 function WaveformInstanceComponent(props: WaveformInstanceProps) {
     const [settingsDialog, setSettingsDialog] = useState<HTMLButtonElement>();
+    /** @todo Add state hidden and don't show the waveform if true to save vertical space */
 
     const waveformRender = () => {
         if (!props.instance.waveform)
@@ -77,6 +112,7 @@ function WaveformInstanceComponent(props: WaveformInstanceProps) {
                 <InstanceSettingsDialog
                     open={settingsDialog !== undefined}
                     instance={props.instance}
+                    session={props.session}
                     anchor={settingsDialog}
                     onClose={() => setSettingsDialog(undefined)}
                 ></InstanceSettingsDialog>
@@ -115,6 +151,7 @@ function CreateStreamDialog(props: CreateStreamDialogProps) {
     const handleSubmit = () => {
         if (streamName && selectedStream)
             props.onSubmit(streamName, selectedStream, selectedStream.paramValues);
+        setStreamName("");
     };
 
     return (
@@ -171,6 +208,7 @@ export function SessionComponent() {
     const handleCreateStream = (name: string, stream: StreamDatabaseItem, params: ParameterValues) => {
         setStreamDialog(false);
         const instance = new stream.stream(params);
+        /** @todo Move stream instantiation to the session addStream */
         session.addStream(name, instance);
     };
 
@@ -182,6 +220,7 @@ export function SessionComponent() {
                 <WaveformInstanceComponent
                     key={i}
                     instance={v}
+                    session={session}
                 ></WaveformInstanceComponent>
             ))}
             
@@ -190,10 +229,10 @@ export function SessionComponent() {
                 onClose={() => setStreamDialog(false)}
                 onSubmit={handleCreateStream}
             ></CreateStreamDialog>
-
             <Grid size={1}>
                 <Button variant="outlined" onClick={() => {setStreamDialog(true);}}>New waveform</Button>
             </Grid>
+
         </Grid>
     );
 }

@@ -3,18 +3,16 @@ export interface AnalogWaveform {
     data:       number[]; /** @todo Change to typed array of floats */
     dataType:   "analog";
     sampleRate: number;
-    offset?:    number;
 }
 
 export interface BinaryWaveform {
     data:       (0 | 1)[]; /** @todo Change to custom bit vector class */
     dataType:   "binary";
     sampleRate: number;
-    offset?:    number;
 }
 
 export interface Frame {
-    data:   string;
+    data:   string | number;
     start:  number;
     end:   number;
 }

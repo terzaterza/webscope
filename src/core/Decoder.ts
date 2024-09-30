@@ -17,7 +17,7 @@ interface InputChannelData {
 /**
  * Map ids to channel information
  */
-type InputChannels = {[chID: string]: InputChannelData};
+export type InputChannels = {[chID: string]: InputChannelData};
 
 /**
  * Map input channel data to waveforms
@@ -50,18 +50,38 @@ export interface DecoderMetadata extends WaveformStreamMetadata {
 export abstract class DecoderStream<T extends DecoderMetadata> extends WaveformStream<T> {
 
     /**
-     * This method should return false if the decoder needs to run
-     * on the entire waveform even when new waveform data is only appended to the end
-     */
-    // public abstract supportsStreaming(): boolean;
-
-    /**
      * Decoder implementation
      * @param input Maps input channel ids to waveform data
-     * @param fromStart Says if the decoder should start the decoding process from the start of the waveforms
-     * @note Decoding result is return through the stream's `onWaveformReady` method
+     * @param fromStart Says if the decoder should start the decoding
+     * process from the start of the waveforms
+     * @note Decoding result is returned through the stream's `onWaveformReady` method
      */
     protected abstract decode(input: InputWaveforms<T["input"]>, fromStart: boolean): Promise<void>;
+
+    /**
+     * Convert channel mappings to waveforms and run the decode implementation
+     */
+    public runDecoder(fromStart: boolean): void {
+        /* Assert that all input channels are mapped to a valid waveform */
+        /** @todo Make sure to invalidate waveforms when deleting them */
+        console.assert(this.allInputsValid());
+
+        /* Map channels to waveforms */
+        const inputWaveforms = objectMap(this.metadata.input,
+            (chId, chData) => this.channelMapping[chId]?.waveform as Waveform
+        ) as InputWaveforms<T["input"]>;
+
+        console.log("Running decoder:", this.metadata.name, "| From start:", fromStart);
+
+        this.decode(inputWaveforms, fromStart);
+    }
+
+    /**
+     * This method should return false if the decoder needs to run
+     * on the entire waveform even when new waveform data is only appended to the end
+     * @todo
+     */
+    // public abstract supportsStreaming(): boolean;
 
     /**
      * Assign the mapping for the ch to the waveform
@@ -87,30 +107,10 @@ export abstract class DecoderStream<T extends DecoderMetadata> extends WaveformS
 
         /* Assign the new waveform */
         this.channelMapping[ch] = waveform;
-
-        /* Reset the stream offset since one of the input waveforms
-        has completely changed */
-        this.streamOffset = 0;
         
         /* Run if all inputs are assigned */
         if (this.allInputsValid())
             this.runDecoder(true);
-    }
-
-    /**
-     * Convert channel mappings to waveforms and run the decode implementation
-     */
-    public runDecoder(fromStart: boolean): void {
-        /* Assert that all input channels are mapped to a valid waveform */
-        /** @todo Make sure to invalidate waveforms when deleting them */
-        console.assert(this.allInputsValid());
-
-        /* Map channels to waveforms */
-        const inputWaveforms = objectMap(this.metadata.input,
-            (chId, chData) => this.channelMapping[chId]?.waveform as Waveform
-        ) as InputWaveforms<T["input"]>;
-
-        this.decode(inputWaveforms, fromStart);
     }
 
     /**
@@ -123,12 +123,22 @@ export abstract class DecoderStream<T extends DecoderMetadata> extends WaveformS
 
     /**
      * Used by the UI to display current state of the mappings
-     * @returns Pairs [Channel name, Waveform name]
+     * @returns Mappings of the input channel id to input data
+     * and selected waveform if one exists
      */
     public getInputMappings() {
-        return Object.entries(this.channelMapping).map(
-            ([id, instance]) => [this.metadata.input[id].name, instance?.name] as [string, string | undefined]
-        );
+        return objectMap(this.metadata.input, (id, inputData) => ({
+            ...inputData,
+            selected: this.channelMapping[id]
+        }));
+    }
+
+    /**
+     * Get samples at the specified time point (time rounded down to the nearest sample)
+     * @note Will throw an error if the time is out of bounds for any of the waveforms
+     */
+    protected getInputAtTime(waveforms: InputWaveforms<T["input"]>, time: number): InputSamples<T["input"]> {
+        return objectMap(waveforms, (ch, waveform) => waveform.data[Math.floor(time * waveform.sampleRate)]);
     }
 
     /**
@@ -143,15 +153,8 @@ export abstract class DecoderStream<T extends DecoderMetadata> extends WaveformS
      * Returns true if all input waveforms are assigned
      */
     private allInputsValid(): boolean {
-        return Object.entries(this.channelMapping).every(([chId, chData]) => chData?.waveform);
+        return Object.entries(this.metadata.input).every(([chId, chData]) => this.channelMapping[chId]?.waveform);
     }
-
-    /**
-     * Offset from the start of the waveforms used when continuing the
-     * decoding process from non-0 index
-     * @note This is reset on selecting new input waveform
-     */
-    protected streamOffset: number = 0;
 
     /**
      * Mapping of each channel to the appropriate input instance
