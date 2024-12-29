@@ -1,7 +1,8 @@
 import { BarChart, LineChart, ScatterChart } from "@mui/x-charts";
 import { Config, Layout } from "plotly.js";
-import { memo } from "react";
+import { memo, useState } from "react";
 import Plot from "react-plotly.js";
+import { Session, WaveformInstance } from "../core/Session";
 
 const PLOTLY_STYLE: React.CSSProperties = {
     width: "100%",
@@ -13,7 +14,7 @@ const PLOTLY_LAYOUT: Partial<Layout> = {
     xaxis: {
         exponentformat: "SI",
         automargin: true,
-        matches: "x2"
+        matches: "x"
     },
     yaxis: {
         automargin: true,
@@ -100,3 +101,41 @@ export const FrameWaveform = memo(function FrameWaveform(props: FrameWaveformPro
         />
     );
 });
+
+interface WaveformInstanceProps {
+    waveforms: WaveformInstance[];
+    session: Session;
+}
+
+function WaveformInstanceComponent(props: WaveformInstanceProps) {
+    const [settingsDialog, setSettingsDialog] = useState<HTMLButtonElement>();
+    /** @todo Add state hidden for each waveform and don't show the waveform if true to save vertical space */
+
+    const waveformRender = () => {
+        if (!props.instance.waveform)
+            return (<></>);
+        switch (props.instance.waveform.dataType) {
+            case "analog": return (<AnalogWaveform {...props.instance.waveform}></AnalogWaveform>)
+            case "binary": return (<BinaryWaveform {...props.instance.waveform}></BinaryWaveform>)
+            case "frame": return (<FrameWaveform {...props.instance.waveform}></FrameWaveform>)
+        }
+    };
+
+    return (
+        <Grid container size={12}>
+            <Grid size={1} alignContent="center">
+                <Button variant="contained" onClick={(ev) => setSettingsDialog(ev.currentTarget)}>{props.instance.name}</Button>
+                <InstanceSettingsDialog
+                    open={settingsDialog !== undefined}
+                    instance={props.instance}
+                    session={props.session}
+                    anchor={settingsDialog}
+                    onClose={() => setSettingsDialog(undefined)}
+                ></InstanceSettingsDialog>
+            </Grid>
+            <Grid size="grow">
+                {waveformRender()}
+            </Grid>
+        </Grid>
+    );
+}

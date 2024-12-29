@@ -86,45 +86,6 @@ function InstanceSettingsDialog(props: InstanceSettingsDialogProps) {
     );
 }
 
-interface WaveformInstanceProps {
-    instance: WaveformInstance;
-    session: Session;
-}
-
-function WaveformInstanceComponent(props: WaveformInstanceProps) {
-    const [settingsDialog, setSettingsDialog] = useState<HTMLButtonElement>();
-    /** @todo Add state hidden and don't show the waveform if true to save vertical space */
-
-    const waveformRender = () => {
-        if (!props.instance.waveform)
-            return (<></>);
-        switch (props.instance.waveform.dataType) {
-            case "analog": return (<AnalogWaveform {...props.instance.waveform}></AnalogWaveform>)
-            case "binary": return (<BinaryWaveform {...props.instance.waveform}></BinaryWaveform>)
-            case "frame": return (<FrameWaveform {...props.instance.waveform}></FrameWaveform>)
-        }
-    };
-
-    return (
-        <Grid container size={12}>
-            <Grid size={1} alignContent="center">
-                <Button variant="contained" onClick={(ev) => setSettingsDialog(ev.currentTarget)}>{props.instance.name}</Button>
-                <InstanceSettingsDialog
-                    open={settingsDialog !== undefined}
-                    instance={props.instance}
-                    session={props.session}
-                    anchor={settingsDialog}
-                    onClose={() => setSettingsDialog(undefined)}
-                ></InstanceSettingsDialog>
-            </Grid>
-            <Grid size="grow">
-                {waveformRender()}
-            </Grid>
-        </Grid>
-    );
-}
-
-
 interface CreateStreamDialogProps {
     open:       boolean;
     onClose:    () => void;
