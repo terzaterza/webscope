@@ -10,20 +10,11 @@ export interface WaveformInstance {
     dataType:   WaveformType;
     waveform?:  Waveform;
     stream:     WaveformStream<WaveformStreamMetadata>;
-    listeners:  DecoderInstance[];
+    listeners:  DecoderStream<DecoderMetadata>[];
     /** @todo Figure out where to keep decoder stream input channel mappings */
 
     locked:     boolean; // If false stream will not be able to update the waveform
     append:     boolean; // If true new waveforms from the stream will be appended to the end
-}
-
-/**
- * Data about a decoder stream instance to track
- * input waveform dependencies
- */
-interface DecoderInstance {
-    decoder: DecoderStream<DecoderMetadata>;
-    inputs: {[ch: string]: WaveformInstance | undefined};
 }
 
 /**

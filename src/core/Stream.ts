@@ -1,16 +1,14 @@
 import { ParameterMap, ParameterValues } from "./Parameter";
 import { Waveform, WaveformFromType, WaveformType } from "./Waveform";
 
-export type StreamChannels = {[ch: string]: {
-    dataType: WaveformType;
+export type StreamChannels<AllowedType extends WaveformType = WaveformType> = {[ch: string]: {
+    dataType: AllowedType;
     name?: string; // More descriptive name than `ch`
     desc?: string;
 }};
 
 export type ChannelWaveforms<T extends StreamChannels> =
     {[ch in keyof T]: WaveformFromType<T[ch]["dataType"]>};
-
-export type WaveformUpdateCallback = (waveform: Waveform) => void;
 
 /**
  * Information required when registering the stream
@@ -21,6 +19,8 @@ export interface WaveformStreamMetadata {
     params: ParameterMap;
     output: StreamChannels;
 }
+
+export type WaveformUpdateCallback = (waveform: Waveform) => void;
 
 /**
  * Base class (interface) for all streams which
