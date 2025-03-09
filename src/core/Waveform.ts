@@ -15,7 +15,7 @@ export interface BinaryWaveform {
 }
 
 export interface Frame {
-    data:   string;
+    data:   string | number;
     start:  number;
     end:   number;
 }

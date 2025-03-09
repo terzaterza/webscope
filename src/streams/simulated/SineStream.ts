@@ -102,7 +102,7 @@ class SineStream extends WaveformStream<typeof sineStreamMetadata> {
         );
     
         this.sampleOffset += timeSamples.length;
-        this.onWaveformRecv({"data": {
+        this.onWaveformReady({"data": {
             data: waveform, dataType: "analog", sampleRate: sampleRate
         }})
     }

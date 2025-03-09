@@ -92,7 +92,7 @@ export abstract class WaveformStream<T extends WaveformStreamMetadata> {
      * Call from derived stream class once the
      * raw data has been converted to a waveform
      */
-    protected onWaveformRecv(data: Partial<ChannelWaveforms<T["output"]>>): void {
+    protected onWaveformReady(data: Partial<ChannelWaveforms<T["output"]>>): void {
         for (const [ch, waveform] of Object.entries(data)) {
             console.assert(ch in this.metadata.output);
             console.assert(waveform.dataType === this.metadata.output[ch].dataType);

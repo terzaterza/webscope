@@ -11,7 +11,6 @@ export interface WaveformInstance {
     waveform?:  Waveform;
     stream:     WaveformStream<WaveformStreamMetadata>;
     listeners:  DecoderInstance[];
-    /** @todo Figure out whether to keep stream parameter values here or in stream object */
     /** @todo Figure out where to keep decoder stream input channel mappings */
 
     locked:     boolean; // If false stream will not be able to update the waveform
@@ -47,6 +46,9 @@ export class Session {
      * Add a stream instance to the session
      * 
      * Creates all the waveforms that the stream can produce
+     * 
+     * @todo Pass StreamDatabaseItem instead of stream object and
+     * instantiate inside this method
      */
     public addStream(streamName: string, stream: WaveformStream<WaveformStreamMetadata>): void {
         /* For each output of the stream create a waveform instance */
@@ -76,6 +78,10 @@ export class Session {
         this.renderCallback([...this.waveforms]);
     };
 
+    public removeStream() {
+        /** @todo Remove stream and for all listeners of the stream's waveforms, set the listener's input to undefined */
+    }
+
     /**
      * Returns instances of all waveforms that match
      * the given data type
@@ -85,11 +91,7 @@ export class Session {
      * @todo Finish this and the decoder stream input select mechanism
      */
     public getWaveformsOfType(type: WaveformType) {
-        return this.waveforms
-            .filter((v) => v.dataType === type)
-            .map((v) => ({
-                name: v.name
-            }));
+        return this.waveforms.filter((v) => v.dataType === type);
     }
 
     /**
