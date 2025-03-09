@@ -1,8 +1,7 @@
-import { BarChart, LineChart, ScatterChart } from "@mui/x-charts";
 import { Config, Layout } from "plotly.js";
-import { memo, useState } from "react";
+import { memo } from "react";
 import Plot from "react-plotly.js";
-import { Session, WaveformInstance } from "../core/Session";
+import { AnalogWaveform, BinaryWaveform, FrameWaveform } from "../core/Waveform";
 
 const PLOTLY_STYLE: React.CSSProperties = {
     width: "100%",
@@ -13,8 +12,7 @@ const PLOTLY_LAYOUT: Partial<Layout> = {
     margin: {t: 0, b: 0},
     xaxis: {
         exponentformat: "SI",
-        automargin: true,
-        matches: "x"
+        automargin: true
     },
     yaxis: {
         automargin: true,
@@ -30,18 +28,17 @@ const PLOTLY_CONFIG: Partial<Config> = {
 };
 
 
-export interface AnalogWaveformProps {
-    data: number[];
-    sampleRate: number;
+interface AnalogWaveformProps {
+    waveform: AnalogWaveform;
 }
 
-export const AnalogWaveform = memo(function AnalogWaveform(props: AnalogWaveformProps) {
+export const AnalogWaveformComponent = memo(function AnalogWaveform(props: AnalogWaveformProps) {
     return (
         <Plot
             data={[{
-                y: props.data,
+                y: props.waveform.data,
                 // @ts-expect-error - dx property not visible
-                dx: 1 / props.sampleRate,
+                dx: 1 / props.waveform.sampleRate,
                 mode: "lines"
             }]}
             style={PLOTLY_STYLE}
@@ -52,18 +49,17 @@ export const AnalogWaveform = memo(function AnalogWaveform(props: AnalogWaveform
 });
 
 
-export interface BinaryWaveformProps {
-    data: (0 | 1)[];
-    sampleRate: number;
+interface BinaryWaveformProps {
+    waveform: BinaryWaveform;
 }
 
-export const BinaryWaveform = memo(function BinaryWaveform(props: BinaryWaveformProps) {
+export const BinaryWaveformComponent = memo(function BinaryWaveform(props: BinaryWaveformProps) {
     return (
         <Plot
             data={[{
-                y: props.data,
+                y: props.waveform.data,
                 // @ts-expect-error - dx property not visible
-                dx: 1 / props.sampleRate,
+                dx: 1 / props.waveform.sampleRate,
                 mode: "lines",
                 line: {shape: "vh"}
             }]}
@@ -74,26 +70,19 @@ export const BinaryWaveform = memo(function BinaryWaveform(props: BinaryWaveform
     );
 });
 
-
-export interface Frame {
-    data: string | number;
-    start: number;
-    end: number;
+interface FrameWaveformProps {
+    waveform: FrameWaveform;
 }
 
-export interface FrameWaveformProps {
-    data: Frame[];
-}
-
-export const FrameWaveform = memo(function FrameWaveform(props: FrameWaveformProps) {
+export const FrameWaveformComponent = memo(function FrameWaveform(props: FrameWaveformProps) {
     return (
         <Plot
             data={[{
                 type: "bar",
-                y: props.data.map((frame) => 1),
-                x: props.data.map((frame) => (frame.start + frame.end) / 2),
-                width: props.data.map((frame) => frame.end - frame.start),
-                text: props.data.map((frame) => frame.data as string)
+                y: props.waveform.data.map((frame) => 1),
+                x: props.waveform.data.map((frame) => (frame.start + frame.end) / 2),
+                width: props.waveform.data.map((frame) => frame.end - frame.start),
+                text: props.waveform.data.map((frame) => frame.data as string)
             }]}
             style={PLOTLY_STYLE}
             layout={PLOTLY_LAYOUT}
@@ -101,41 +90,3 @@ export const FrameWaveform = memo(function FrameWaveform(props: FrameWaveformPro
         />
     );
 });
-
-interface WaveformInstanceProps {
-    waveforms: WaveformInstance[];
-    session: Session;
-}
-
-function WaveformInstanceComponent(props: WaveformInstanceProps) {
-    const [settingsDialog, setSettingsDialog] = useState<HTMLButtonElement>();
-    /** @todo Add state hidden for each waveform and don't show the waveform if true to save vertical space */
-
-    const waveformRender = () => {
-        if (!props.instance.waveform)
-            return (<></>);
-        switch (props.instance.waveform.dataType) {
-            case "analog": return (<AnalogWaveform {...props.instance.waveform}></AnalogWaveform>)
-            case "binary": return (<BinaryWaveform {...props.instance.waveform}></BinaryWaveform>)
-            case "frame": return (<FrameWaveform {...props.instance.waveform}></FrameWaveform>)
-        }
-    };
-
-    return (
-        <Grid container size={12}>
-            <Grid size={1} alignContent="center">
-                <Button variant="contained" onClick={(ev) => setSettingsDialog(ev.currentTarget)}>{props.instance.name}</Button>
-                <InstanceSettingsDialog
-                    open={settingsDialog !== undefined}
-                    instance={props.instance}
-                    session={props.session}
-                    anchor={settingsDialog}
-                    onClose={() => setSettingsDialog(undefined)}
-                ></InstanceSettingsDialog>
-            </Grid>
-            <Grid size="grow">
-                {waveformRender()}
-            </Grid>
-        </Grid>
-    );
-}

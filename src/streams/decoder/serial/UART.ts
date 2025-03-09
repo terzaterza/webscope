@@ -1,4 +1,4 @@
-import { DecoderMetadata, InputChannels } from "../../../core/Decoder";
+import { DecoderMetadata } from "../../../core/Decoder";
 import { ParameterMap, ParameterValues } from "../../../core/Parameter";
 import { registerStream } from "../../../core/Stream";
 import { FrameDecoderStream } from "../FrameDecoder";
@@ -34,7 +34,7 @@ const uartParameters = {
 
 const uartInput = {
     "data": { name: "TX/RX", dataType: "binary" }
-} satisfies InputChannels;
+} satisfies DecoderMetadata["input"];
 
 /**
  * @todo Instead of adding decoder: true to each decoder metadata,
@@ -45,8 +45,7 @@ const uartMetadata = {
     name: "UART Decoder",
     params: uartParameters,
     input: uartInput,
-    output: {"bytes": "frame"},
-    decoder: true
+    output: {"bytes": {dataType: "frame"}}
 } satisfies DecoderMetadata;
 
 /**

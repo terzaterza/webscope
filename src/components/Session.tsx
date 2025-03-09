@@ -1,13 +1,13 @@
 import { Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, ListSubheader, MenuItem, Modal, Paper, Popover, Select, TextField, Tooltip, Typography } from "@mui/material";
 import React, { useState } from "react";
 import { getStreamList, StreamDatabaseItem } from "../core/Stream";
-import { AnalogWaveform, BinaryWaveform, FrameWaveform } from "./Waveform";
 import Grid from "@mui/material/Grid2";
 import { Session, WaveformInstance } from "../core/Session";
 import { ParameterMapComponent } from "./Parameter";
 import { ParameterValues } from "../core/Parameter";
 import { objectMap } from "../core/Util";
 import { DecoderMetadata, DecoderStream } from "../core/Decoder";
+import { AnalogWaveformComponent, BinaryWaveformComponent, FrameWaveformComponent } from "./Waveform";
 
 
 interface DecoderInputSelectProps {
@@ -16,17 +16,18 @@ interface DecoderInputSelectProps {
 }
 
 function DecoderInputSelect(props: DecoderInputSelectProps) {
+    const inputMap = props.stream.getInputs();
     return (
         <Grid container size={12} spacing={1}>
-            {Object.entries(props.stream.getInputMappings()).map(([id, channelData]) => (
+            {Object.entries(props.stream.metadata.input).map(([id, channelData]) => (
                 <Grid size={12} key={id}>
                     <Tooltip title={channelData.desc}>
-                        <TextField select label={channelData.name} defaultValue={channelData.selected?.name ?? ""} fullWidth>
+                        <TextField select label={channelData.name} defaultValue={inputMap[id]?.name ?? ""} fullWidth>
                             {props.session.getWaveformsOfType(channelData.dataType).map((v, i) => (
                                 <MenuItem
                                     key={i}
                                     value={v.name}
-                                    onClick={(ev) => {props.stream.selectInput(id, v)}}
+                                    onClick={(ev) => {props.stream.setInput(id, v)}}
                                 >{v.name}</MenuItem>
                             ))}
                         </TextField>
@@ -158,6 +159,43 @@ function CreateStreamDialog(props: CreateStreamDialogProps) {
     );
 }
 
+interface WaveformInstanceProps {
+    instance: WaveformInstance;
+    session: Session;
+}
+
+function WaveformInstanceComponent(props: WaveformInstanceProps) {
+    const [settingsDialog, setSettingsDialog] = useState<HTMLButtonElement>();
+    /** @todo Add state hidden for each waveform and don't show the waveform if true to save vertical space */
+
+    const waveformRender = () => {
+        if (!props.instance.waveform)
+            return (<></>);
+        switch (props.instance.waveform.dataType) {
+            case "analog": return (<AnalogWaveformComponent waveform={{...props.instance.waveform}}></AnalogWaveformComponent>)
+            case "binary": return (<BinaryWaveformComponent waveform={{...props.instance.waveform}}></BinaryWaveformComponent>)
+            case "frame": return (<FrameWaveformComponent waveform={{...props.instance.waveform}}></FrameWaveformComponent>)
+        }
+    };
+
+    return (
+        <Grid container size={12}>
+            <Grid size={1} alignContent="center">
+                <Button variant="contained" onClick={(ev) => setSettingsDialog(ev.currentTarget)}>{props.instance.name}</Button>
+                <InstanceSettingsDialog
+                    open={settingsDialog !== undefined}
+                    instance={props.instance}
+                    session={props.session}
+                    anchor={settingsDialog}
+                    onClose={() => setSettingsDialog(undefined)}
+                ></InstanceSettingsDialog>
+            </Grid>
+            <Grid size="grow">
+                {waveformRender()}
+            </Grid>
+        </Grid>
+    );
+}
 
 export function SessionComponent() {
     const [waveforms, setWaveforms] = useState<WaveformInstance[]>([]);

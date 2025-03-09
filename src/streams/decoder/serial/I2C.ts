@@ -1,4 +1,4 @@
-import { DecoderMetadata, InputChannels } from "../../../core/Decoder";
+import { DecoderMetadata } from "../../../core/Decoder";
 import { ParameterMap, ParameterValues } from "../../../core/Parameter";
 import { registerStream } from "../../../core/Stream";
 import { FrameDecoderStream } from "../FrameDecoder";
@@ -14,14 +14,13 @@ const i2cParameters = {
 const i2cInput = {
     "scl": {name: "SCL", dataType: "binary"},
     "sda": {name: "SDA", dataType: "binary"}
-} satisfies InputChannels;
+} satisfies DecoderMetadata["input"];
 
 const i2cMetadata = {
     name: "I2C Decoder",
     params: i2cParameters,
     input: i2cInput,
-    output: {"bits": "frame", "bytes": "frame"},
-    decoder: true
+    output: {"bits": {dataType: "frame"}, "bytes": {dataType: "frame"}}
 } satisfies DecoderMetadata;
 
 /**

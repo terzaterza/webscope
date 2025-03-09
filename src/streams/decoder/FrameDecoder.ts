@@ -1,5 +1,6 @@
-import { DecoderMetadata, DecoderStream, InputChannels, InputSamples, InputWaveforms } from "../../core/Decoder";
+import { DecoderMetadata, DecoderStream, InputSamples } from "../../core/Decoder";
 import { ParameterValues } from "../../core/Parameter";
+import { ChannelWaveforms, StreamChannels } from "../../core/Stream";
 import { objectMap, PriorityQueue } from "../../core/Util";
 import { AnalogWaveform, BinaryWaveform, Frame, FrameWaveform, WaveformFromType, WaveformType } from "../../core/Waveform";
 
@@ -14,31 +15,6 @@ type TriggerFromDataType<T extends WaveformType> =
     T extends AnalogWaveform["dataType"] ? AnalogTrigger :
     T extends BinaryWaveform["dataType"] ? BinaryTrigger :
     never;
-
-function checkTrigger(
-    dataType:   WaveformType,
-    trigger:    AnalogTrigger | BinaryTrigger,
-    prevValue:  number,
-    value:      number
-): boolean {
-    if (dataType === "analog") {
-        const analogTrigger = trigger as AnalogTrigger;
-        switch (analogTrigger.level) {
-            case "high":    return value >= analogTrigger.thresh;
-            case "low":     return value <= analogTrigger.thresh;
-        }
-    } else {
-        const binaryTrigger = trigger as BinaryTrigger;
-        switch (binaryTrigger) {
-            case "high":    return value === 1;
-            case "low":     return value === 0;
-            case "rising":  return prevValue === 0 && value === 1;
-            case "falling": return prevValue === 1 && value === 0;
-            case "edge":    return prevValue !== value;
-        }
-    }
-    return false;
-}
 
 /**
  * Collection of conditions where a condition is a mapping
@@ -70,7 +46,7 @@ class NoInputAssignedError extends Error {
  * Allow only frame waveforms as output
  */
 interface FrameDecoderMetadata extends DecoderMetadata {
-    output: {[ch: string]: FrameWaveform["dataType"]};
+    output: StreamChannels<"frame">;
 }
 
 /**
@@ -100,7 +76,7 @@ export abstract class FrameDecoderStream<T extends FrameDecoderMetadata> extends
      * be approximated by their last sample
      * 
      */
-    protected waitTime(seconds: number): Promise<InputSamples<T["input"]>> {
+    protected waitTime(seconds: number): Promise<InputSamples<T>> {
         if (!this.currentInput)
             throw new NoInputAssignedError();
 
@@ -126,6 +102,7 @@ export abstract class FrameDecoderStream<T extends FrameDecoderMetadata> extends
         /* If all the waveforms have a valid sample at this time point
         increase the time offset and return the samples */
         this.timeOffset = nextTime;
+        // @ts-expect-error
         return Promise.resolve(objectMap(this.currentInput,
             (ch, waveform) => waveform.data[samplePositions[ch]])
         );
@@ -136,10 +113,10 @@ export abstract class FrameDecoderStream<T extends FrameDecoderMetadata> extends
      * each conditions consists of required value (or change of value)
      * for some of the input channels
      */
-    protected waitTrigger(triggerSet: TriggerSet<T>, triggerSetState?: TriggerSetState): Promise<[keyof typeof triggerSet, InputSamples<T["input"]>]> {
+    protected waitTrigger(triggerSet: TriggerSet<T>, triggerSetState?: TriggerSetState): Promise<[keyof typeof triggerSet, InputSamples<T>]> {
         interface QueueItem {
             ch:         keyof T["input"];
-            waveform:   InputWaveforms<T["input"]>[string];
+            waveform:   ChannelWaveforms<T["input"]>[string];
             sampleTime: number;
         };
 
@@ -272,7 +249,7 @@ export abstract class FrameDecoderStream<T extends FrameDecoderMetadata> extends
     /**
      * Frame decoder implementation
      */
-    protected async decode(input: InputWaveforms<T["input"]>, fromStart: boolean) {
+    protected async decode(input: ChannelWaveforms<T["input"]>, fromStart: boolean) {
         /* If decoding from the start, reset the decoder state */
         if (fromStart)
             this.reset();
@@ -336,20 +313,21 @@ export abstract class FrameDecoderStream<T extends FrameDecoderMetadata> extends
         this.currentInput = undefined;
 
         for (const ch in this.currentOutput)
+            // @ts-expect-error
             this.currentOutput[ch] = {data: [], dataType: "frame"};
     }
 
     /**
      * Input waveforms set by the last call of the decode method
      */
-    private currentInput?: InputWaveforms<T["input"]>;
+    private currentInput?: ChannelWaveforms<T["input"]>;
 
     /**
      * Output buffer for adding the frames to
      */
     // @ts-expect-error - Bug? - Check objectMap
-    private currentOutput: {[ch in keyof T["output"]]: FrameWaveform} = objectMap(this.metadata.output,
-        (ch, frameType) => ({dataType: frameType, data: []})
+    private currentOutput: ChannelWaveforms<T["output"]> = objectMap(this.metadata.output,
+        (ch, chData) => ({dataType: "frame", data: []}) as FrameWaveform
     );
 
     /**
@@ -369,7 +347,7 @@ export abstract class FrameDecoderStream<T extends FrameDecoderMetadata> extends
      */
     private timePromise?: {
         time: number;
-        resolve: (data: InputSamples<T["input"]>) => void;
+        resolve: (data: InputSamples<T>) => void;
         reject: () => void
     };
 
@@ -380,7 +358,32 @@ export abstract class FrameDecoderStream<T extends FrameDecoderMetadata> extends
     private triggerPromise?: {
         triggers: TriggerSet<T>;
         triggerState: TriggerSetState;
-        resolve: (data: [keyof TriggerSet<T>, InputSamples<T["input"]>]) => void;
+        resolve: (data: [keyof TriggerSet<T>, InputSamples<T>]) => void;
         reject: () => void;
     };
+}
+
+function checkTrigger(
+    dataType:   WaveformType,
+    trigger:    AnalogTrigger | BinaryTrigger,
+    prevValue:  number,
+    value:      number
+): boolean {
+    if (dataType === "analog") {
+        const analogTrigger = trigger as AnalogTrigger;
+        switch (analogTrigger.level) {
+            case "high":    return value >= analogTrigger.thresh;
+            case "low":     return value <= analogTrigger.thresh;
+        }
+    } else {
+        const binaryTrigger = trigger as BinaryTrigger;
+        switch (binaryTrigger) {
+            case "high":    return value === 1;
+            case "low":     return value === 0;
+            case "rising":  return prevValue === 0 && value === 1;
+            case "falling": return prevValue === 1 && value === 0;
+            case "edge":    return prevValue !== value;
+        }
+    }
+    return false;
 }
