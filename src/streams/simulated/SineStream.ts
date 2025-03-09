@@ -44,7 +44,7 @@ const sineStreamParameters = {
 const sineStreamMetadata = {
     name: "Sine",
     params: sineStreamParameters,
-    output: {"Sin": "analog"}
+    output: {"data": {name: "Sine", dataType: "analog"}}
 } satisfies WaveformStreamMetadata;
 
 
@@ -102,7 +102,7 @@ class SineStream extends WaveformStream<typeof sineStreamMetadata> {
         );
     
         this.sampleOffset += timeSamples.length;
-        this.onWaveformReady({"Sin": {
+        this.onWaveformReady({"data": {
             data: waveform, dataType: "analog", sampleRate: sampleRate
         }})
     }

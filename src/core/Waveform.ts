@@ -1,20 +1,21 @@
 
 export interface AnalogWaveform {
-    data:       number[]; /** @todo Change to typed array of floats */
+    // data:       Int16Array;
+    // scale:      number; // Scale max int16
+    data:       number[];
     dataType:   "analog";
     sampleRate: number;
-    offset?:    number;
 }
 
 export interface BinaryWaveform {
-    data:       (0 | 1)[]; /** @todo Change to custom bit vector class */
+    // data:       Uint8Array;
+    data:       (0 | 1)[];
     dataType:   "binary";
     sampleRate: number;
-    offset?:    number;
 }
 
 export interface Frame {
-    data:   string;
+    data:   string | number;
     start:  number;
     end:   number;
 }

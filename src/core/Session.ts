@@ -1,3 +1,4 @@
+import { DecoderMetadata, DecoderStream } from "./Decoder";
 import { WaveformStream, WaveformStreamMetadata } from "./Stream";
 import { Waveform, WaveformType } from "./Waveform";
 
@@ -9,21 +10,11 @@ export interface WaveformInstance {
     dataType:   WaveformType;
     waveform?:  Waveform;
     stream:     WaveformStream<WaveformStreamMetadata>;
-    listeners:  DecoderInstance[];
-    /** @todo Figure out whether to keep stream parameter values here or in stream object */
+    listeners:  DecoderStream<DecoderMetadata>[];
     /** @todo Figure out where to keep decoder stream input channel mappings */
 
-    enabled:    boolean; // If false stream will not be able to update the waveform
+    locked:     boolean; // If false stream will not be able to update the waveform
     append:     boolean; // If true new waveforms from the stream will be appended to the end
-}
-
-/**
- * Data about a decoder stream instance to track
- * input waveform dependencies
- */
-interface DecoderInstance {
-    decoder: any; /** @todo Replace with DecoderWaveformStream */
-    inputs: {[ch: string]: WaveformInstance | undefined};
 }
 
 /**
@@ -46,16 +37,19 @@ export class Session {
      * Add a stream instance to the session
      * 
      * Creates all the waveforms that the stream can produce
+     * 
+     * @todo Pass StreamDatabaseItem instead of stream object and
+     * instantiate inside this method
      */
     public addStream(streamName: string, stream: WaveformStream<WaveformStreamMetadata>): void {
         /* For each output of the stream create a waveform instance */
-        for (const [outputName, outputType] of Object.entries(stream.metadata.output)) {
+        for (const [outputCh, outputMetadata] of Object.entries(stream.metadata.output)) {
             const instance: WaveformInstance = {
-                name:       streamName + " (" + outputName + ")",
-                dataType:   outputType,
+                name:       streamName + " (" + (outputMetadata.name ?? outputCh) + ")",
+                dataType:   outputMetadata.dataType,
                 stream:     stream,
                 listeners:  [],
-                enabled:    true,
+                locked:     false,
                 append:     false
             };
 
@@ -63,7 +57,7 @@ export class Session {
             this.waveforms.push(instance);
 
             /* Set the callback for when the streams generates new data */
-            stream.setCallback(outputName, (data: Waveform) => {
+            stream.setCallback(outputCh, (data: Waveform) => {
                 this.updateWaveform(instance, data);
             });
         }
@@ -71,11 +65,13 @@ export class Session {
         /* Now that the callbacks exist, can start with data generation */
         stream.start();
         
-        /** @todo Check if can avoid double rendering here (from stream start and the render below) */
-
         /* Rerender waveforms */
         this.renderCallback([...this.waveforms]);
     };
+
+    public removeStream() {
+        /** @todo Remove stream and for all listeners of the stream's waveforms, set the listener's input to undefined */
+    }
 
     /**
      * Returns instances of all waveforms that match
@@ -86,11 +82,7 @@ export class Session {
      * @todo Finish this and the decoder stream input select mechanism
      */
     public getWaveformsOfType(type: WaveformType) {
-        return this.waveforms
-            .filter((v) => v.dataType === type)
-            .map((v) => ({
-                name: v.name
-            }));
+        return this.waveforms.filter((v) => v.dataType === type);
     }
 
     /**
@@ -99,7 +91,7 @@ export class Session {
      */
     private updateWaveform(instance: WaveformInstance, data: Waveform): void {
         /* If the channel is disabled, can't update the waveform */
-        if (!instance.enabled)
+        if (instance.locked)
             return;
 
         /* If the update sequence was not already started, we are the first */

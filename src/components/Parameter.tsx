@@ -129,7 +129,7 @@ function OptionParameterComponent(props: ParameterProps<"option">) {
                 label={props.param.name}
                 value={props.value}
                 // @ts-expect-error
-                onChange={(ev) => props.onSelect(ev.target.checked)}
+                onChange={(ev) => props.onChange(ev.target.checked)}
                 fullWidth
             ></TextField>
         </Tooltip>

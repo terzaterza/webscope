@@ -1,5 +1,6 @@
 import { ParameterMap, ParameterValues } from "../../core/Parameter";
 import { registerStream, WaveformStream, WaveformStreamMetadata } from "../../core/Stream";
+import { BinaryWaveform } from "../../core/Waveform";
 
 const streamParameters = {
     "data": {
@@ -20,7 +21,7 @@ const streamParameters = {
 const streamMetadata = {
     name: "Binary from text",
     params: streamParameters,
-    output: { "data": "binary" }
+    output: { "data": {dataType: "binary"} }
 } satisfies WaveformStreamMetadata;
 
 
@@ -34,13 +35,25 @@ class BinaryTextStream extends WaveformStream<typeof streamMetadata> {
         const {data, period} = this.getParameterValues();
 
         /** @todo Can set bit to random if the character is not 0 or 1 */
-        const binaryData = data.split("").map((c) => c === "1" ? 1 : 0);
+        const binaryData = this.parseStringInput(data);
 
         this.onWaveformReady({data: {data: binaryData, dataType: "binary", sampleRate: 1 / period}});
     }
 
     protected onSetParameter(id: "data" | "period", value: string | number): Promise<void> {
+        if (id === "data") {
+            const waveform: BinaryWaveform = {
+                dataType: "binary",
+                data: this.parseStringInput(value as string),
+                sampleRate: 1 / this.getParameterValues()["period"]
+            };
+            this.onWaveformReady({"data": waveform});
+        }
         return Promise.resolve();
+    }
+
+    private parseStringInput(data: string): BinaryWaveform["data"] {
+        return data.split("").filter((c) => c !== ' ').map((c) => c === "1" ? 1 : 0);
     }
 
 }

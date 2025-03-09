@@ -21,7 +21,6 @@ interface SelectParameter<T> {
 
 interface OptionParameter {
     type:       "option";
-    checked:    boolean;
     default:    boolean;
 }
 

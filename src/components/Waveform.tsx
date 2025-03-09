@@ -1,60 +1,92 @@
-import { BarChart, LineChart, ScatterChart } from "@mui/x-charts";
+import { Config, Layout } from "plotly.js";
 import { memo } from "react";
+import Plot from "react-plotly.js";
+import { AnalogWaveform, BinaryWaveform, FrameWaveform } from "../core/Waveform";
 
-const WAVEFORM_HEIGHT = 220;
+const PLOTLY_STYLE: React.CSSProperties = {
+    width: "100%",
+    height: "25vh"
+};
 
-export interface AnalogWaveformProps {
-    data: number[];
-    sampleRate: number;
+const PLOTLY_LAYOUT: Partial<Layout> = {
+    margin: {t: 0, b: 0},
+    xaxis: {
+        exponentformat: "SI",
+        automargin: true
+    },
+    yaxis: {
+        automargin: true,
+        fixedrange: true
+    },
+    dragmode: "pan"
+};
+
+const PLOTLY_CONFIG: Partial<Config> = {
+    displayModeBar: false,
+    responsive: true,
+    scrollZoom: true
+};
+
+
+interface AnalogWaveformProps {
+    waveform: AnalogWaveform;
 }
 
-export const AnalogWaveform = memo(function AnalogWaveform(props: AnalogWaveformProps) {
+export const AnalogWaveformComponent = memo(function AnalogWaveform(props: AnalogWaveformProps) {
     return (
-        <LineChart
-        skipAnimation
-        series={[{curve: "linear", data: props.data, showMark: false}]}
-        xAxis={[{data: props.data.map((v, i) => i / props.sampleRate)}]}
-        height={WAVEFORM_HEIGHT}
-        ></LineChart>
+        <Plot
+            data={[{
+                y: props.waveform.data,
+                // @ts-expect-error - dx property not visible
+                dx: 1 / props.waveform.sampleRate,
+                mode: "lines"
+            }]}
+            style={PLOTLY_STYLE}
+            layout={PLOTLY_LAYOUT}
+            config={PLOTLY_CONFIG}
+        />
     );
 });
 
 
-export interface BinaryWaveformProps {
-    data: (0 | 1)[];
-    sampleRate: number;
+interface BinaryWaveformProps {
+    waveform: BinaryWaveform;
 }
 
-export const BinaryWaveform = memo(function BinaryWaveform(props: BinaryWaveformProps) {
+export const BinaryWaveformComponent = memo(function BinaryWaveform(props: BinaryWaveformProps) {
     return (
-        <LineChart
-        skipAnimation
-        series={[{curve: "stepAfter", data: props.data, showMark: false}]}
-        xAxis={[{data: props.data.map((v, i) => i / props.sampleRate)}]}
-        yAxis={[{min: -0.1, max: 1.1}]}
-        height={WAVEFORM_HEIGHT}
-        ></LineChart>
+        <Plot
+            data={[{
+                y: props.waveform.data,
+                // @ts-expect-error - dx property not visible
+                dx: 1 / props.waveform.sampleRate,
+                mode: "lines",
+                line: {shape: "vh"}
+            }]}
+            style={PLOTLY_STYLE}
+            layout={PLOTLY_LAYOUT}
+            config={PLOTLY_CONFIG}
+        />
     );
 });
 
-
-export interface Frame {
-    data: string | number;
-    start: number;
-    end: number;
+interface FrameWaveformProps {
+    waveform: FrameWaveform;
 }
 
-export interface FrameWaveformProps {
-    data: Frame[];
-}
-
-export const FrameWaveform = memo(function FrameWaveform(props: FrameWaveformProps) {
-    const interval = [props.data[0].start, props.data[props.data.length-1].end];
+export const FrameWaveformComponent = memo(function FrameWaveform(props: FrameWaveformProps) {
     return (
-        <LineChart
-        series={[{curve: "stepAfter", area: true, showMark: false, data: props.data.map((v) => [1, 0]).flat()}]}
-        xAxis={[{data: props.data.map((v) => [v.start, v.end]).flat()}]}
-        height={WAVEFORM_HEIGHT}
-        ></LineChart>
+        <Plot
+            data={[{
+                type: "bar",
+                y: props.waveform.data.map((frame) => 1),
+                x: props.waveform.data.map((frame) => (frame.start + frame.end) / 2),
+                width: props.waveform.data.map((frame) => frame.end - frame.start),
+                text: props.waveform.data.map((frame) => frame.data as string)
+            }]}
+            style={PLOTLY_STYLE}
+            layout={PLOTLY_LAYOUT}
+            config={PLOTLY_CONFIG}
+        />
     );
 });
