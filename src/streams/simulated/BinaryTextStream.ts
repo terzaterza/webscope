@@ -20,7 +20,7 @@ const streamParameters = {
 const streamMetadata = {
     name: "Binary from text",
     params: streamParameters,
-    output: { "data": "binary" }
+    output: { "data": {dataType: "binary"} }
 } satisfies WaveformStreamMetadata;
 
 
@@ -36,7 +36,7 @@ class BinaryTextStream extends WaveformStream<typeof streamMetadata> {
         /** @todo Can set bit to random if the character is not 0 or 1 */
         const binaryData = data.split("").map((c) => c === "1" ? 1 : 0);
 
-        this.onWaveformReady({data: {data: binaryData, dataType: "binary", sampleRate: 1 / period}});
+        this.onWaveformRecv({data: {data: binaryData, dataType: "binary", sampleRate: 1 / period}});
     }
 
     protected onSetParameter(id: "data" | "period", value: string | number): Promise<void> {

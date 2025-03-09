@@ -1,3 +1,4 @@
+import { DecoderMetadata, DecoderStream } from "./Decoder";
 import { WaveformStream, WaveformStreamMetadata } from "./Stream";
 import { Waveform, WaveformType } from "./Waveform";
 
@@ -13,7 +14,7 @@ export interface WaveformInstance {
     /** @todo Figure out whether to keep stream parameter values here or in stream object */
     /** @todo Figure out where to keep decoder stream input channel mappings */
 
-    enabled:    boolean; // If false stream will not be able to update the waveform
+    locked:     boolean; // If false stream will not be able to update the waveform
     append:     boolean; // If true new waveforms from the stream will be appended to the end
 }
 
@@ -22,7 +23,7 @@ export interface WaveformInstance {
  * input waveform dependencies
  */
 interface DecoderInstance {
-    decoder: any; /** @todo Replace with DecoderWaveformStream */
+    decoder: DecoderStream<DecoderMetadata>;
     inputs: {[ch: string]: WaveformInstance | undefined};
 }
 
@@ -49,13 +50,13 @@ export class Session {
      */
     public addStream(streamName: string, stream: WaveformStream<WaveformStreamMetadata>): void {
         /* For each output of the stream create a waveform instance */
-        for (const [outputName, outputType] of Object.entries(stream.metadata.output)) {
+        for (const [outputCh, outputMetadata] of Object.entries(stream.metadata.output)) {
             const instance: WaveformInstance = {
-                name:       streamName + " (" + outputName + ")",
-                dataType:   outputType,
+                name:       streamName + " (" + (outputMetadata.name ?? outputCh) + ")",
+                dataType:   outputMetadata.dataType,
                 stream:     stream,
                 listeners:  [],
-                enabled:    true,
+                locked:     false,
                 append:     false
             };
 
@@ -63,7 +64,7 @@ export class Session {
             this.waveforms.push(instance);
 
             /* Set the callback for when the streams generates new data */
-            stream.setCallback(outputName, (data: Waveform) => {
+            stream.setCallback(outputCh, (data: Waveform) => {
                 this.updateWaveform(instance, data);
             });
         }
@@ -71,8 +72,6 @@ export class Session {
         /* Now that the callbacks exist, can start with data generation */
         stream.start();
         
-        /** @todo Check if can avoid double rendering here (from stream start and the render below) */
-
         /* Rerender waveforms */
         this.renderCallback([...this.waveforms]);
     };
@@ -99,7 +98,7 @@ export class Session {
      */
     private updateWaveform(instance: WaveformInstance, data: Waveform): void {
         /* If the channel is disabled, can't update the waveform */
-        if (!instance.enabled)
+        if (instance.locked)
             return;
 
         /* If the update sequence was not already started, we are the first */

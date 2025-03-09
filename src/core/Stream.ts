@@ -1,16 +1,25 @@
 import { ParameterMap, ParameterValues } from "./Parameter";
 import { Waveform, WaveformFromType, WaveformType } from "./Waveform";
 
-type StreamOutputType   = { [ch: string]: WaveformType };
-type ChannelCallback    = (data: Waveform) => void;
+export type StreamChannels = {[ch: string]: {
+    dataType: WaveformType;
+    name?: string; // More descriptive name than `ch`
+    desc?: string;
+}};
+
+export type ChannelWaveforms<T extends StreamChannels> =
+    {[ch in keyof T]: WaveformFromType<T[ch]["dataType"]>};
+
+export type WaveformUpdateCallback = (waveform: Waveform) => void;
 
 /**
  * Information required when registering the stream
  */
 export interface WaveformStreamMetadata {
     name:   string;
+    desc?:  string;
     params: ParameterMap;
-    output: StreamOutputType;
+    output: StreamChannels;
 }
 
 /**
@@ -36,15 +45,6 @@ export abstract class WaveformStream<T extends WaveformStreamMetadata> {
     public abstract start(): void;
 
     /**
-     * Abstract method to allow streams to react to setting new
-     * parameter values
-     * 
-     * This can be used to communicate with serial port devices
-     * for setting parameters dynamically as UI sets new values
-     */
-    protected abstract onSetParameter(id: keyof T["params"], value: T["params"][typeof id]["default"]): Promise<void>;
-
-    /**
      * This method is called by the UI when a parameter value
      * has been changed
      * 
@@ -65,10 +65,11 @@ export abstract class WaveformStream<T extends WaveformStreamMetadata> {
     /**
      * Used by the Session object to set the callback
      * for updating the data of the correct waveform instance
+     * @todo Move this to constructor and make the callback non-optional
      */
-    public setCallback(ch: string, callback: ChannelCallback): void {
+    public setCallback(ch: string, callback: WaveformUpdateCallback): void {
         console.assert(ch in this.metadata.output);
-        this.dataReadyCallback[ch] = callback;
+        this.waveformUpdateCallbacks[ch] = callback;
     }
 
     /**
@@ -79,22 +80,31 @@ export abstract class WaveformStream<T extends WaveformStreamMetadata> {
     }
 
     /**
+     * Abstract method to allow streams to react to setting new
+     * parameter values
+     * 
+     * This can be used to communicate with serial port devices
+     * for setting parameters dynamically as UI sets new values
+     */
+    protected abstract onSetParameter(id: keyof T["params"], value: T["params"][typeof id]["default"]): Promise<void>;
+
+    /**
      * Call from derived stream class once the
      * raw data has been converted to a waveform
      */
-    protected onWaveformReady(data: {[ch in keyof T["output"]]: WaveformFromType<T["output"][ch]>}): void {
+    protected onWaveformRecv(data: Partial<ChannelWaveforms<T["output"]>>): void {
         for (const [ch, waveform] of Object.entries(data)) {
-            /** @todo Verify that data is actually of data type */
-            
-            /* Check that data type is correct */
-            console.assert(waveform.dataType === this.metadata.output[ch]);
+            console.assert(ch in this.metadata.output);
+            console.assert(waveform.dataType === this.metadata.output[ch].dataType);
     
-            if (this.dataReadyCallback[ch])
-                this.dataReadyCallback[ch](waveform);
+            if (this.waveformUpdateCallbacks[ch])
+                this.waveformUpdateCallbacks[ch](waveform);
         }
     }
 
-    private dataReadyCallback: {[ch: string]: ChannelCallback} = {};
+    // Used by the UI to update the display as the waveform data changes
+    private waveformUpdateCallbacks: {[ch: string]: WaveformUpdateCallback} = {};
+    // Current parameter values
     private parameterValues: ParameterValues<T["params"]>;
 }
 
